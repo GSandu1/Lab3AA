@@ -1,103 +1,92 @@
-import time
-import random
 import numpy as np
+import time
 import networkx as nx
 import matplotlib.pyplot as plt
 
-def dijkstra(graph, start):
-    dist = {node: float('inf') for node in graph}
-    dist[start] = 0
-    visited = set()
+class GraphAlgorithms:
+    def __init__(self, graph):
+        self.graph = graph
+        self.n = len(graph)
 
-    while len(visited) != len(graph):
-        min_node = None
-        for node in dist:
-            if node not in visited:
-                if min_node is None or dist[node] < dist[min_node]:
-                    min_node = node
-        visited.add(min_node)
+    def dijkstra(self, start):
+        dist = [float('inf')] * self.n
+        visited = [False] * self.n
+        dist[start] = 0
+        for _ in range(self.n):
+            u = min((x for x in range(self.n) if not visited[x]), key=dist.__getitem__)
+            visited[u] = True
+            for v in range(self.n):
+                if self.graph[u][v] != 0 and not visited[v]:
+                    alt = dist[u] + self.graph[u][v]
+                    if alt < dist[v]:
+                        dist[v] = alt
+        return dist
 
-        for neighbor, weight in graph[min_node].items():
-            new_dist = dist[min_node] + weight
-            if new_dist < dist[neighbor]:
-                dist[neighbor] = new_dist
-    return dist
+    def floyd_warshall(self):
+        dist = self.graph.copy()
+        for k in range(self.n):
+            for i in range(self.n):
+                for j in range(self.n):
+                    dist[i][j] = min(dist[i][j], dist[i][k] + dist[k][j])
+        return dist
 
-def floyd(graph):
-    nodes = list(graph.keys())
-    n = len(nodes)
-    dist = np.full((n, n), np.inf)
+    def draw_graph(self):
+        G = nx.DiGraph()
+        for i in range(self.n):
+            for j in range(self.n):
+                if self.graph[i][j] != 0:
+                    G.add_edge(i, j, weight=self.graph[i][j])
+        pos = nx.spring_layout(G)
+        nx.draw(G, pos, with_labels=True)
+        labels = nx.get_edge_attributes(G, 'weight')
+        nx.draw_networkx_edge_labels(G, pos, edge_labels=labels)
+        plt.show()
 
-    for i, node in enumerate(nodes):
-        dist[i, i] = 0
-        for neighbor, weight in graph[node].items():
-            j = nodes.index(neighbor)
-            dist[i, j] = weight
+def generate_graph(n, graph_type='sparse'):
+    if graph_type == 'sparse':
+        return np.random.choice([0, 1], size=(n, n), p=[0.9, 0.1])
+    else:
+        return np.random.randint(0,10, size=(n, n))
 
-    for k in range(n):
-        for i in range(n):
-            for j in range(n):
-                if dist[i, k] + dist[k, j] < dist[i, j]:
-                    dist[i, j] = dist[i, k] + dist[k, j]
+def measure_algorithm_times(algorithm, graph_type):
+    times = []
+    for n in range(10, 101, 10):
+        graph = generate_graph(n, graph_type)
+        graph_algo = GraphAlgorithms(graph)
+        start_time = time.time()
+        if algorithm == 'dijkstra':
+            graph_algo.dijkstra(0)
+        else:
+            getattr(graph_algo, algorithm)()
+        end_time = time.time()
+        times.append(end_time - start_time)
+    return times
 
-    return {nodes[i]: {nodes[j]: dist[i, j] for j in range(n)} for i in range(n)}
-
-def generate_random_graph(num_nodes, max_weight=10):
-    graph = {i: {} for i in range(num_nodes)}
-    for i in range(num_nodes):
-        for j in range(i+1, num_nodes):
-            weight = random.randint(1, max_weight)
-            graph[i][j] = weight
-            graph[j][i] = weight
-    return graph
-
-def plot_comparison(nodes, dijkstra_times, floyd_times):
-    plt.plot(nodes, dijkstra_times, label="Dijkstra")
-    plt.plot(nodes, floyd_times, label="Floyd")
-    plt.xlabel("Nr of Nodes")
-    plt.ylabel("Execution Time (s)")
+def plot_execution_times(times, algorithm_name, graph_type):
+    plt.plot(range(10, 101, 10), times, label=f"{algorithm_name} ({graph_type.capitalize()})")
     plt.legend()
-    plt.title("Dijkstra vs Floyd Execution Time Comparison")
+    plt.xlabel("Number of Nodes")
+    plt.ylabel("Execution Time (Seconds)")
+    plt.title(f"Execution Time of {algorithm_name} on {graph_type.capitalize()} Graph")
     plt.show()
-
-def draw_graph_tree(graph, title):
-    G = nx.Graph(graph)
-    pos = nx.spring_layout(G)
-    nx.draw(G, pos, with_labels=True, node_color='skyblue', font_size=10, font_weight='bold', node_size=700)
-    nx.draw_networkx_edge_labels(G, pos, edge_labels={(i, j): graph[i][j] for i in graph for j in graph[i]})
-    plt.title(title)
-    plt.show()
-
-def main():
-    num_nodes = [5, 10, 15, 20, 25]
-    dijkstra_times = []
-    floyd_times = []
-
-    for n in num_nodes:
-        graph = generate_random_graph(n)
-        start_time = time.time()
-        dijkstra(graph, 0)
-        dijkstra_times.append(time.time() - start_time)
-
-        start_time = time.time()
-        floyd(graph)
-        floyd_times.append(time.time() - start_time)
-
-    plot_comparison(num_nodes, dijkstra_times, floyd_times)
-
-    sample_graph = generate_random_graph(10)
-    draw_graph_tree(sample_graph, "Sample Graph for Dijkstra and Floyd Algorithms")
-
-    dijkstra_tree = dijkstra(sample_graph, 0)
-    draw_graph_tree({node: {neighbor: sample_graph[node][neighbor] for neighbor in sample_graph[node] if
-                            dijkstra_tree[neighbor] == dijkstra_tree[node] + sample_graph[node][neighbor]} for node in
-                     sample_graph}, "Dijkstra's Algorithm Graph Tree")
-
-    floyd_tree = floyd(sample_graph)
-    draw_graph_tree({node: {neighbor: sample_graph[node][neighbor] for neighbor in sample_graph[node] if
-                            floyd_tree[node][neighbor] == sample_graph[node][neighbor]} for node in sample_graph},
-                    "Floyd's Algorithm Graph Tree")
-
 
 if __name__ == "__main__":
-    main()
+    algorithms = ['dijkstra', 'floyd_warshall']
+    graph_types = ['sparse', 'dense']
+
+    for graph_type in graph_types:
+        plt.figure(figsize=(10, 6))
+        for algorithm in algorithms:
+            times = measure_algorithm_times(algorithm, graph_type)
+            plt.plot(range(10, 101, 10), times, label=f"{algorithm.replace('_', ' ').title()} ({graph_type.capitalize()})")
+
+        plt.legend()
+        plt.xlabel("Number of Nodes")
+        plt.ylabel("Execution Time (Seconds)")
+        plt.title(f"Execution Time of Shortest Path Algorithms on {graph_type.capitalize()} Graph")
+        plt.show()
+
+    # Draw sample graphs
+    for graph_type in graph_types:
+        graph = generate_graph(10, graph_type)
+        GraphAlgorithms(graph).draw_graph()
